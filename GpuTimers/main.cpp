@@ -162,9 +162,6 @@ int main(int argc, char **argv)
         // Reset the timer.
         glfwSetTime(0);
 
-        // Not needed by me personally, but feel free
-        // to enable this again if you want to configure it
-#if 0
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
             moveX += 0.01f;
 
@@ -174,8 +171,16 @@ int main(int argc, char **argv)
         if (moveX > 0)
             moveX = 0;
 
+        // dont need to print for now
+#if 0
         printf("%f\n", rotY);
 #endif
+
+        // Determine if you want to benchmark, by pressing 'b'
+        bool benchmarkThisFrame = false;
+        if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
+            benchmarkThisFrame = true;
+
 
         // Update the player controller
         controller.Update(window, viewportDimensions, mousePosition, dt);
@@ -193,10 +198,13 @@ int main(int argc, char **argv)
 #endif
             .1f, 100.f);
 
-        // This is added to the GPU command buffer, and 
-        // will take effect when the command buffer executes.
-        // First stamp is at the beginning of the frame
-        glQueryCounter(queryID[0], GL_TIMESTAMP);
+        if (benchmarkThisFrame)
+        {
+            // This is added to the GPU command buffer, and 
+            // will take effect when the command buffer executes.
+            // First stamp is at the beginning of the frame
+            glQueryCounter(queryID[0], GL_TIMESTAMP);
+        }
 
         // Clear the depth buffers
         glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -256,9 +264,12 @@ int main(int argc, char **argv)
         int startX = screenW / 2;
 #endif
 
-        // Set another timestamp after the first eye finishes
-        // rendering, and before the second eye starts
-        glQueryCounter(queryID[1], GL_TIMESTAMP);
+        if (benchmarkThisFrame)
+        {
+            // Set another timestamp after the first eye finishes
+            // rendering, and before the second eye starts
+            glQueryCounter(queryID[1], GL_TIMESTAMP);
+        }
 
         glViewport(startX, 0, sizeX, viewportDimensions.y);
 
@@ -299,29 +310,32 @@ int main(int argc, char **argv)
         material->Bind();
         car->Draw();
 
-        // Put a final time stamp when the frame finishes
-        glQueryCounter(queryID[2], GL_TIMESTAMP);
-
-        // assume the stamps are not immediately available
-        GLint stopTimerAvailable = 0;
-
-        // keep looping while they aren't available
-        while (!stopTimerAvailable)
+        if (benchmarkThisFrame)
         {
-            // Keep checking the status of the last time stamp, to see if the GPU
-            // recorded the stamp, and sent it back to the CPU
-            glGetQueryObjectiv(queryID[2], GL_QUERY_RESULT_AVAILABLE, &stopTimerAvailable);
+            // Put a final time stamp when the frame finishes
+            glQueryCounter(queryID[2], GL_TIMESTAMP);
+
+            // assume the stamps are not immediately available
+            GLint stopTimerAvailable = 0;
+
+            // keep looping while they aren't available
+            while (!stopTimerAvailable)
+            {
+                // Keep checking the status of the last time stamp, to see if the GPU
+                // recorded the stamp, and sent it back to the CPU
+                glGetQueryObjectiv(queryID[2], GL_QUERY_RESULT_AVAILABLE, &stopTimerAvailable);
+            }
+
+            // get query results
+            glGetQueryObjectui64v(queryID[0], GL_QUERY_RESULT, &startTime);
+            glGetQueryObjectui64v(queryID[1], GL_QUERY_RESULT, &midPoint);
+            glGetQueryObjectui64v(queryID[2], GL_QUERY_RESULT, &stopTime);
+
+            system("cls");
+            printf("First Eye: %f ms\n", (midPoint - startTime) / 1000000.0);
+            printf("Second Eye: %f ms\n", (stopTime - midPoint) / 1000000.0);
+            printf("Full Frame: %f ms\n", (stopTime - startTime) / 1000000.0);
         }
-
-        // get query results
-        glGetQueryObjectui64v(queryID[0], GL_QUERY_RESULT, &startTime);
-        glGetQueryObjectui64v(queryID[1], GL_QUERY_RESULT, &midPoint);
-        glGetQueryObjectui64v(queryID[2], GL_QUERY_RESULT, &stopTime);
-
-        system("cls");
-        printf("First Eye: %f ms\n", (midPoint - startTime) / 1000000.0);
-        printf("Second Eye: %f ms\n", (stopTime - midPoint) / 1000000.0);
-        printf("Full Frame: %f ms\n", (stopTime - startTime) / 1000000.0);
 
 		// Swap the backbuffer to the front.
 		glfwSwapBuffers(window);
